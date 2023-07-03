@@ -8,14 +8,23 @@
 #define OLED_CMD_MODE   0x00
 #define OLED_DAT_MODE   0x40
 
-static void oled_print_minus(void);
-static void oled_print_degree_symbol(void);
-static void oled_print_unit(void);
+static void oled_print_symbol(char symbol);
 static void oled_print_digit(uint8_t digit);
 static void iic_init(void);
 static void iic_start(uint8_t);
 static void iic_stop(void);
 static void iic_write(uint8_t);
+
+static const uint8_t symbols[] PROGMEM =
+{
+    0x08, 0x08, 0x08, 0x08, 0x08, // -
+    0b00000000, 0b00000110, 0b00001001, 0b00001001, 0b00000110, // ° TODO - change to hex
+#if defined(LM35)
+    0x3E, 0x41, 0x41, 0x41, 0x22, // C
+#elif defined(LM34)
+    0x7F, 0x09, 0x09, 0x09, 0x01, // F
+#endif
+};
 
 static const uint8_t digits[] PROGMEM =
 {
@@ -31,38 +40,11 @@ static const uint8_t digits[] PROGMEM =
     0x06, 0x49, 0x49, 0x29, 0x1E, // 9
 };
 
-static const uint8_t minus[] PROGMEM =
-{
-      0x08, 0x08, 0x08, 0x08, 0x08 // -
-};
-
-// TODO - change to hex:
-static const uint8_t degree_symbol[] PROGMEM =
-{
-    0b00000000,
-    0b00000110,
-    0b00001001,
-    0b00001001,
-    0b00000110
-};
-
-#if defined(LM35)
-    static const uint8_t unit[] PROGMEM =
-    {
-        0x3E, 0x41, 0x41, 0x41, 0x22 // C
-    };
-#elif defined(LM34)
-    static const uint8_t unit[] PROGMEM =
-    {
-        0x7F, 0x09, 0x09, 0x09, 0x01 // F
-    };
-#endif
-
 void oled_print_temperature(int32_t temperature)
 {
     oled_set_cursor(TEMPERATURE_X, TEMPERATURE_Y);
 
-    iic_start(OLED_ADDR);
+    iic_start(IIC_ADDRESS);
     iic_write(OLED_DAT_MODE);
 
     uint8_t mean_value;
@@ -81,12 +63,8 @@ void oled_print_temperature(int32_t temperature)
 
     uint8_t ones = modulo;
 
-    /*
-        What will happen when a negative temperature value is passed?
-    */
-
     if(temperature < 0)
-        oled_print_minus();
+        oled_print_symbol('-');
 
     if(hundreds > 0)
         oled_print_digit(hundreds);
@@ -94,8 +72,13 @@ void oled_print_temperature(int32_t temperature)
         oled_print_digit(tens);
     oled_print_digit(ones);
 
-    oled_print_degree_symbol();
-    oled_print_unit();
+    oled_print_symbol('D'); // 'D' stands for '°' (Degree symbol)
+    
+#if defined(LM35)
+    oled_print_symbol('C');
+#elif defined(LM34)
+    oled_print_symbol('F');
+#endif
 
     iic_stop();
 }
@@ -104,7 +87,7 @@ void oled_clear_temperature(void)
 {
     oled_set_cursor(TEMPERATURE_X, TEMPERATURE_Y);               
 
-    iic_start(OLED_ADDR);                   
+    iic_start(IIC_ADDRESS);                   
     iic_write(OLED_DAT_MODE);               
     for(uint16_t i = 0; i < 5 * CHAR_W; i++)
         iic_write(0x00);                    
@@ -114,7 +97,7 @@ void oled_clear_temperature(void)
 void oled_init()
 {
     iic_init();
-    iic_start(OLED_ADDR);
+    iic_start(IIC_ADDRESS);
     iic_write(OLED_CMD_MODE);
     
     /*
@@ -141,7 +124,7 @@ void oled_init()
 
 void oled_set_cursor(uint8_t x, uint8_t line)
 {
-    iic_start(OLED_ADDR);
+    iic_start(IIC_ADDRESS);
     iic_write(OLED_CMD_MODE);
     iic_write(x & 0x0F);
     iic_write(0x10 | (x >> 4));
@@ -153,35 +136,48 @@ void oled_clear(void)
 {
     oled_set_cursor(0, 0);               
 
-    iic_start(OLED_ADDR);                   
+    iic_start(IIC_ADDRESS);                   
     iic_write(OLED_DAT_MODE);               
     for(uint16_t i = 0; i < 512; i++)
         iic_write(0x00);                    
     iic_stop();                             
 }
 
-static void oled_print_minus()
+static void oled_print_symbol(char symbol)
 {
-    iic_write(0x00);
-
-    for(uint8_t i = 0; i < 5; i++)
-        iic_write(pgm_read_byte(&minus[i]));
-}
-
-static void oled_print_degree_symbol()
-{
-    iic_write(0x00);
-
-    for(uint8_t i = 0; i < 5; i++)
-        iic_write(pgm_read_byte(&degree_symbol[i]));
-}
-
-static void oled_print_unit()
-{
-    iic_write(0x00);
-
-    for(uint8_t i = 0; i < 5; i++)
-        iic_write(pgm_read_byte(&unit[i]));
+    uint8_t offset;
+    switch (symbol)
+    {
+        case '-':
+            iic_write(0x00);
+            offset = 0;
+            for(uint8_t i = 0; i < 5; i++)
+                iic_write(pgm_read_byte(&symbols[offset + i]));
+            break;
+        case 'D':  // 'D' stands for '°' (Degree symbol)
+            iic_write(0x00);
+            offset = 5;
+            for(uint8_t i = 0; i < 5; i++)
+                iic_write(pgm_read_byte(&symbols[offset + i]));
+            break;
+#if defined(LM35)
+        case 'C':
+            iic_write(0x00);
+            offset = 10;
+            for(uint8_t i = 0; i < 5; i++)
+                iic_write(pgm_read_byte(&symbols[offset + i]));
+            break;
+#elif defined(LM34)
+        case 'F':
+            iic_write(0x00);
+            offset = 10;
+            for(uint8_t i = 0; i < 5; i++)
+                iic_write(pgm_read_byte(&symbols[offset + i]));
+            break;
+#endif
+        default:
+            break;
+    }
 }
 
 static void oled_print_digit(uint8_t digit)

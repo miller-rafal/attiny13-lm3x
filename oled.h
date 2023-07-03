@@ -8,7 +8,7 @@
 #include "common.h"
 
 /*
-    Definitions of IIC registers and pins used to drive the OLED display
+    Definitions of IIC registers, pins and address used to drive the OLED display
 */
 
 #define IIC_DDR     DDRB
@@ -16,7 +16,7 @@
 #define SCL_PIN     PB3
 #define SDA_PIN     PB4
 
-#define OLED_ADDR   0x78
+#define IIC_ADDRESS 0x78
 
 /*
     Definitions of screen and character dimensions

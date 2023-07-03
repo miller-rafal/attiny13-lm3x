@@ -6,16 +6,19 @@
 #include "oled.h"
 #include "temperature.h"
 
+
+
 int main()
 {
     oled_init();
-    adc_init();
+    adc_init(ADC_PIN);
     
     oled_clear();
     while(1)
     {
         uint16_t millivolts = adc_measure_millivolts();
         int32_t temperature = calculate_temperature(millivolts);
+
         //int32_t temperature = 155;
         //temperature *= -1;
 
